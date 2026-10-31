@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#17222c">
+<meta name="description" content="Indoor-Velotraining: GPX-Strecken in einer erzeugten 3D-Welt fahren, Smart Trainer steuern, Workouts erstellen.">
+<title>Velo-Sim</title>
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+<div id="app">
+  <canvas id="scene" aria-label="3D-Ansicht der Strecke"></canvas>
+
+  <div class="top">
+    <div class="toolbar panel">
+      <div class="brand"><i></i>Velo-Sim</div>
+      <button id="btnPlay" class="primary" title="Start oder Pause (Leertaste)">Start</button>
+      <button id="btnTrainer" title="Smart Trainer über Bluetooth verbinden"><span class="dot" id="dotTrainer"></span>Trainer</button>
+      <button id="btnHr" title="Pulsgurt über Bluetooth verbinden"><span class="dot" id="dotHr"></span>Puls</button>
+      <button id="btnClick" title="Zwift Click als Schalter verbinden"><span class="dot" id="dotClick"></span>Click</button>
+      <button id="btnGpx" title="GPX-Datei laden">GPX laden</button>
+      <button id="btnCam" title="Kameraperspektive wechseln (C)">Kamera</button>
+      <button id="btnSettings" class="ghost" title="Einstellungen" aria-label="Einstellungen">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      </button>
+      <button id="btnWo" title="Workouts: eigene erstellen oder Datei laden (.zwo, .fit, .erg, .mrc)">Workout</button>
+      <button id="btnSaveRide" title="Bisherige Fahrt als .fit-Datei für Strava oder Garmin Connect speichern" hidden>Fahrt speichern</button>
+      <input type="file" id="fileGpx" accept=".gpx,application/gpx+xml" hidden>
+      <input type="file" id="fileWo" accept=".zwo,.fit,.erg,.mrc,.xml" hidden>
+      <input type="file" id="fileBackup" accept=".json,application/json" hidden>
+    </div>
+
+    <div class="hud panel" aria-live="off">
+      <div class="m power"><div class="l">Leistung</div><div class="v"><span id="vPower">0</span><small id="vPowerUnit">W</small></div><div class="zone" id="vZone">–</div></div>
+      <div class="grid">
+        <div class="m"><div class="l">Tempo</div><div class="v"><span id="vSpeed">0,0</span><small>km/h</small></div></div>
+        <div class="m"><div class="l">Steigung</div><div class="v grade-chip"><span id="vGrade">0,0</span><small>%</small></div></div>
+        <div class="m"><div class="l">Zeit</div><div class="v"><span id="vTime">0:00</span></div></div>
+        <div class="m"><div class="l">Kadenz</div><div class="v"><span id="vCad">–</span><small>rpm</small></div></div>
+        <div class="m"><div class="l">Puls</div><div class="v"><span id="vHr">–</span><small>bpm</small></div></div>
+        <div class="m"><div class="l">Höhenmeter</div><div class="v"><span id="vClimb">0</span><small>m</small></div></div>
+      </div>
+    </div>
+
+    <div class="mini panel"><canvas id="minimap" aria-label="Übersichtskarte"></canvas></div>
+  </div>
+
+  <div class="ctrl panel" id="ctrlPanel">
+    <div class="seg" role="group" aria-label="Trainer-Modus">
+      <button id="modeSim" aria-pressed="true" title="Widerstand folgt der Steigung (M)">Steigung</button>
+      <button id="modeErg" aria-pressed="false" title="Trainer hält eine feste Leistung (M)">ERG</button>
+    </div>
+    <div class="ctrl-row" id="rowGear">
+      <div class="ctrl-lbl">Virtueller Gang<small id="gearRatio">Übersetzung –</small></div>
+      <button class="step ring" id="frontBtn" title="Kettenblatt wechseln (F)" aria-label="Kettenblatt wechseln">–</button>
+      <button class="step" id="gearDown" title="Leichterer Gang (← oder −)" aria-label="Leichterer Gang">−</button>
+      <span class="num big" id="gearVal">–</span>
+      <button class="step" id="gearUp" title="Schwererer Gang (→ oder +)" aria-label="Schwererer Gang">+</button>
+    </div>
+    <div class="ctrl-row" id="rowErg" hidden>
+      <div class="ctrl-lbl">Zielleistung<small>Trainer regelt auf diesen Wert</small></div>
+      <button class="step" id="ergDown" title="−10 W (↓)" aria-label="Zielleistung senken">−</button>
+      <span class="num big" id="ergVal">200<small>W</small></span>
+      <button class="step" id="ergUp" title="+10 W (↑)" aria-label="Zielleistung erhöhen">+</button>
+    </div>
+    <div class="ctrl-row" id="rowSim">
+      <label for="simPower" class="ctrl-lbl">Simulierte Leistung<small>ohne Trainer</small></label>
+      <input type="range" id="simPower" min="0" max="600" step="5" value="180">
+      <span class="num" id="simVal">180 W</span>
+    </div>
+    <div class="ctrl-keys"><kbd>M</kbd> Modus · <kbd>←</kbd> <kbd>→</kbd> Ritzel · <kbd>F</kbd> Blatt · <kbd>↑</kbd> <kbd>↓</kbd> ±10 W</div>
+  </div>
+
+  <div class="bottom panel">
+    <div class="row"><span id="routeName">–</span><span><b id="vDist">0,0</b> von <span id="vTotal">0,0</span> km, noch <span id="vLeft">0,0</span> km</span></div>
+    <canvas id="profile" aria-label="Höhenprofil"></canvas>
+  </div>
+
+  <div class="overlay" id="ovStart">
+    <div class="card">
+      <h1>Velo-Sim</h1>
+      <p>Strecke wählen, Trainer verbinden und losfahren. Die Welt rund um die Route wird beim Fahren erzeugt.</p>
+      <div class="facts">
+        <div><span class="num" id="sDist">0</span><span>km</span></div>
+        <div><span class="num" id="sClimb">0</span><span>Höhenmeter</span></div>
+        <div><span class="num" id="sMax">0</span><span>% steilste Stelle</span></div>
+      </div>
+      <p style="color:var(--text);font-weight:600;margin-bottom:12px" id="sName">–</p>
+      <div class="actions">
+        <button class="primary" id="btnGo">Los geht’s</button>
+        <button id="btnGpx2">GPX-Datei laden</button>
+        <button id="btnTrainer2"><span class="dot" id="dotTrainer2"></span>Trainer verbinden</button>
+      </div>
+      <div class="hint">
+        Trainer und Pulsgurt brauchen Chrome oder Edge auf dem Computer oder Android (Bluetooth). Ohne Trainer fährst du mit dem Leistungsregler.
+        GPX-Strecken und Workouts (.zwo, .fit, .erg, .mrc) kannst du auch ins Fenster ziehen. Tasten: <kbd>Leertaste</kbd> Start/Pause, <kbd>C</kbd> Kamera, <kbd>M</kbd> Steigung/ERG, <kbd>←</kbd> <kbd>→</kbd> Ritzel, <kbd>F</kbd> Kettenblatt, <kbd>↑</kbd> <kbd>↓</kbd> Leistung.
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="ovFinish" hidden>
+    <div class="card">
+      <h2>Ziel erreicht</h2>
+      <div class="facts">
+        <div><span class="num" id="fTime">0:00</span><span>Fahrzeit</span></div>
+        <div><span class="num" id="fDist">0</span><span>km</span></div>
+        <div><span class="num" id="fClimb">0</span><span>Höhenmeter</span></div>
+        <div><span class="num" id="fPow">0</span><span>W im Schnitt</span></div>
+        <div><span class="num" id="fSpd">0</span><span>km/h im Schnitt</span></div>
+      </div>
+      <div class="actions">
+        <button class="primary" id="btnFinishFit">Fahrt als .fit speichern</button>
+        <button id="btnAgain">Nochmals fahren</button>
+        <button id="btnGpx3">Andere Strecke laden</button>
+      </div>
+      <div class="hint">Die .fit-Datei kannst du auf Strava (Hochladen → Datei) oder in Garmin Connect (Importieren → Daten) hochladen.</div>
+    </div>
+  </div>
+
+  <div class="overlay" id="ovSettings" hidden>
+    <div class="card">
+      <h2>Einstellungen</h2>
+      <div class="field"><label for="setRider">Fahrergewicht</label><input type="number" id="setRider" min="30" max="160" step="1"></div>
+      <div class="field"><label for="setBike">Velogewicht</label><input type="number" id="setBike" min="4" max="30" step="0.5"></div>
+      <div class="field"><label for="setPos">Sitzposition<small>bestimmt den Luftwiderstand</small></label>
+        <select id="setPos"><option value="0.40">Oberlenker</option><option value="0.32">Bremsgriffe</option><option value="0.27">Unterlenker</option></select></div>
+      <div class="field"><label for="setFtp">FTP<small>Grundlage für Zonen und Workouts, in Watt</small></label><input type="number" id="setFtp" min="50" max="600" step="1"></div>
+      <div class="field"><label for="setUnit">Leistung anzeigen in</label><select id="setUnit"><option value="w">Watt</option><option value="pct">% FTP</option></select></div>
+      <div class="field"><label for="setDiff">Trainer-Schwierigkeit<small>Anteil der Steigung, die der Trainer simuliert</small></label><input type="number" id="setDiff" min="0" max="100" step="5"></div>
+      <div class="field"><label for="setRings">Virtuelle Kettenblätter</label><select id="setRings" style="width:190px"></select></div>
+      <div class="field"><label for="setCassette">Virtuelle Kassette</label><select id="setCassette" style="width:190px"></select></div>
+      <div class="field"><label for="setSynchro">Schaltmodus<small>Synchro: vorne wird automatisch geschaltet</small></label>
+        <select id="setSynchro" style="width:190px"><option value="1">Synchro (wie Di2)</option><option value="0">Manuell (F fürs Blatt)</option></select></div>
+      <div class="field"><label for="setRing">Echter Gang am Trainer<small>Kettenblatt × Ritzel, z.B. kleines Blatt × Zwift Cog</small></label>
+        <span class="pair"><input type="number" id="setRing" min="20" max="60" step="1" aria-label="Zähne Kettenblatt">×<input type="number" id="setCog" min="9" max="36" step="1" aria-label="Zähne Ritzel"></span></div>
+      <div class="field"><label for="setTele">Telemetrie senden<small>Fahrzustand per WebSocket, z.B. an Unreal Engine</small></label>
+        <span class="pair"><input type="checkbox" id="setTele"><input type="text" id="setTeleUrl" style="width:190px" placeholder="ws://localhost:8787" aria-label="WebSocket-Adresse"></span></div>
+      <div class="actions"><button class="primary" id="btnSaveSet">Speichern</button><button id="btnCloseSet">Abbrechen</button><button class="ghost" id="btnDiag">Trainer-Diagnose (D)</button></div>
+      <div class="hint">Daten: <button class="ghost" id="btnBackup">Sichern (.json)</button> <button class="ghost" id="btnRestore">Wiederherstellen</button>
+        <br>Sichert Einstellungen und eigene Workouts in eine Datei, z.B. für einen anderen Browser oder PC.</div>
+    </div>
+  </div>
+
+  <div class="wo panel" id="woPanel" hidden>
+    <div class="wo-head">
+      <b id="woName">Workout</b>
+      <span class="wo-btns">
+        <button class="ghost" id="woUnit" title="Anzeige zwischen Watt und % FTP wechseln">Watt</button>
+        <button class="ghost" id="woSkip" title="Nächster Abschnitt (N)">Weiter ⏭</button>
+        <button class="ghost" id="woClose" title="Workout beenden" aria-label="Workout beenden">✕</button>
+      </span>
+    </div>
+    <canvas id="woChart" aria-label="Verlauf des Workouts"></canvas>
+    <div class="wo-info">
+      <div class="wo-now"><span class="wo-seg" id="woSeg">–</span><span class="num wo-left" id="woLeft">0:00</span></div>
+      <span class="num wo-target" id="woTarget">–</span>
+    </div>
+    <div class="wo-foot"><span id="woNext">–</span><span id="woTotal">–</span></div>
+  </div>
+
+  <div class="map panel" id="mapPanel" hidden>
+    <div id="map" aria-label="Karte der Strecke"></div>
+    <button class="map-btn" id="btnMapMode" title="Zwischen Mitfahren und ganzer Strecke wechseln">Ganze Strecke</button>
+  </div>
+
+  <div class="diag panel" id="diag" hidden>
+    <div class="diag-head"><b>Trainer-Diagnose</b><button class="ghost" id="btnDiagClose" aria-label="Diagnose schliessen">✕</button></div>
+    <pre id="diagStatus"></pre>
+    <pre id="diagLog" class="log"></pre>
+  </div>
+
+  <div class="overlay" id="ovWo" hidden>
+    <div class="card wide">
+      <div id="woLib">
+        <div class="card-head"><h2>Workouts</h2><button class="ghost" id="woLibClose" aria-label="Schliessen">✕</button></div>
+        <div class="actions">
+          <button class="primary" id="woNew">Neues Workout</button>
+          <button id="woFile">Datei laden (.zwo, .fit, .erg, .mrc)</button>
+        </div>
+        <div id="woList" class="wo-list"></div>
+      </div>
+      <div id="woEdit" hidden>
+        <div class="card-head"><h2 id="woEdTitle">Neues Workout</h2><button class="ghost" id="woEdBack" title="Zurück zur Liste">← Liste</button></div>
+        <input id="woEdName" class="ed-name" placeholder="Name, z.B. 5×1 min VO2max" maxlength="60" aria-label="Name des Workouts">
+        <div id="woEdChartWrap" class="ed-chart">
+          <canvas id="woEdChart" aria-label="Vorschau des Workouts: Kante ziehen ändert die Dauer, Block hoch oder runter ziehen ändert die Leistung"></canvas>
+          <div class="ed-tip" id="woEdTip" hidden></div>
+        </div>
+        <div class="ed-hint">Ziehen: rechte Kante eines Blocks = Dauer · Block hoch/runter = Leistung (Rampen: links Start, rechts Ende)</div>
+        <div class="ed-sum" id="woEdSum"></div>
+        <div id="woEdBlocks" class="ed-blocks"></div>
+        <div id="woEdAdd" class="ed-add"></div>
+        <div class="actions">
+          <button class="primary" id="woEdRide">Speichern und fahren</button>
+          <button id="woEdSave">Speichern</button>
+          <button class="ghost" id="woEdZwo" title="Für Rouvy, Zwift oder als Sicherung">Als .zwo herunterladen</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast panel" id="toast" hidden></div>
+  <div class="drop" id="drop" hidden>GPX-Strecke oder Workout (.zwo, .fit, .erg, .mrc) hier ablegen</div>
+</div>
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>

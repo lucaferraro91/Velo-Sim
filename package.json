@@ -1,0 +1,34 @@
+{
+  "name": "velo-sim",
+  "version": "0.2.0",
+  "description": "Indoor-Velotraining: GPX-Strecken in einer erzeugten 3D-Welt, Smart-Trainer-Steuerung, Workouts",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "icons": "node scripts/make-icons.mjs",
+    "relay": "node tools/relay.mjs"
+  },
+  "type": "module",
+  "dependencies": {
+    "leaflet": "^1.9.4",
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "@types/leaflet": "^1.9.22",
+    "@types/node": "^26.6.6",
+    "@types/three": "^0.187.0",
+    "@types/web-bluetooth": "^0.0.22",
+    "@types/ws": "^8.18.2",
+    "fit-file-parser": "^6.2.7",
+    "happy-dom": "^21.0.4",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vite-plugin-pwa": "^2.0.0",
+    "vitest": "^5.0.5",
+    "ws": "^8.22.1"
+  },
+  "private": true
+}
