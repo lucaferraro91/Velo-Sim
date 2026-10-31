@@ -2,7 +2,7 @@
    Zwift-Dienst 00000001-19ca-…: 0002 Notify (Tasten), 0003 Write (Handshake/Keepalive), 0004 Indicate (Antwort).
    Ohne "RideOn" alle 3 s trennt sich der Click nach etwa einer Minute. */
 import { bus, notify, sleep } from '../util';
-import { ZW, RIDE_ON, parseClick, parseHr } from './protocol';
+import { ZW, RIDE_ON, HRS, CH, parseClick, parseHr } from './protocol';
 import { btAvailable, btError } from './trainer';
 import { tlog } from './diag';
 
@@ -11,12 +11,12 @@ export const hrm = { device: null as BluetoothDevice | null, connected: false, b
 export async function connectHr() {
   if (!btAvailable()) return;
   try {
-    const device = await (navigator as any).bluetooth.requestDevice({ filters: [{ services: ['heart_rate'] }] });
+    const device = await (navigator as any).bluetooth.requestDevice({ filters: [{ services: [HRS] }] });
     hrm.device = device;
     device.addEventListener('gattserverdisconnected', () => { hrm.connected = false; bus.emit('devices'); notify('Pulsgurt getrennt.'); });
     const server = await device.gatt.connect();
-    const svc = await server.getPrimaryService('heart_rate');
-    const ch = await svc.getCharacteristic('heart_rate_measurement');
+    const svc = await server.getPrimaryService(HRS);
+    const ch = await svc.getCharacteristic(CH.heartRate);
     ch.addEventListener('characteristicvaluechanged', (e: any) => { hrm.bpm = parseHr(e.target.value); hrm.lastAt = performance.now(); });
     await ch.startNotifications();
     hrm.connected = true; bus.emit('devices'); notify((device.name || 'Pulsgurt') + ' verbunden.');

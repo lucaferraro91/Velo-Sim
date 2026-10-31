@@ -1,10 +1,21 @@
 import { describe, it, expect } from 'vitest';
-import { simBytes, ergBytes, ftmsToFec, fecMsg, fecUserConfig, parseFec, parseIndoorBike, parseClick, parseCyclingPower, describeCmd } from '../src/ble/protocol';
+import { FTMS, CPS, HRS, CH, simBytes, ergBytes, ftmsToFec, fecMsg, fecUserConfig, parseFec, parseIndoorBike, parseClick, parseCyclingPower, describeCmd } from '../src/ble/protocol';
 
 const dv = (a: number[]) => new DataView(new Uint8Array(a).buffer);
 const xor = (m: number[]) => m.slice(0, -1).reduce((a, b) => a ^ b, 0);
 const sim = (grade: number, k: number, v = 0) => simBytes(grade, k, { riderKg: 75, bikeKg: 8.5, crr: 0.004, cda: 0.32, v });
 const rawGrade = (b: number[]) => (b[3] | (b[4] << 8)) << 16 >> 16;
+
+describe('Bluetooth-Kennungen', () => {
+  it('sind vollständige Text-UUIDs (für Bluefy auf dem iPad)', () => {
+    expect(FTMS).toBe('00001826-0000-1000-8000-00805f9b34fb');
+    expect(CPS).toBe('00001818-0000-1000-8000-00805f9b34fb');
+    expect(HRS).toBe('0000180d-0000-1000-8000-00805f9b34fb');
+    expect(CH.indoorBike).toBe('00002ad2-0000-1000-8000-00805f9b34fb');
+    expect(CH.heartRate).toBe('00002a37-0000-1000-8000-00805f9b34fb');
+    for (const u of [FTMS, CPS, HRS, ...Object.values(CH)]) expect(u).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+  });
+});
 
 describe('FTMS', () => {
   it('kodiert die Steigung im echten Gang unverändert (0,01 %, auf 0,1 % gerundet)', () => {

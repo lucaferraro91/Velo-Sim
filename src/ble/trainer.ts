@@ -5,7 +5,7 @@ import { settings } from '../settings';
 import { state, ride } from '../core/state';
 import { gearFactor } from '../core/gears';
 import {
-  FTMS, CPS, TACX_FEC, TACX_RX, TACX_TX, OPNAMES, RESNAMES,
+  FTMS, CPS, CH, TACX_FEC, TACX_RX, TACX_TX, OPNAMES, RESNAMES,
   simBytes, ergBytes, describeCmd, fecUserConfig, ftmsToFec, parseFec, parseIndoorBike, parseCyclingPower,
   type BikeData, type CrankPrev
 } from './protocol';
@@ -124,17 +124,17 @@ export async function connectTrainer(all = false) {
     if (ftms) {
       step = 'FTMS einrichten';
       trainer.proto = 'ftms'; tlog('FTMS-Dienst gefunden');
-      const data = await ftms.getCharacteristic(0x2AD2);
+      const data = await ftms.getCharacteristic(CH.indoorBike);
       data.addEventListener('characteristicvaluechanged', (e: any) => applyData(parseIndoorBike(e.target.value)));
       await data.startNotifications();
       // Fähigkeiten (Fitness Machine Feature): Bit 3 = Zielleistung, Bit 13 = Simulation
       try {
-        const fv = await (await ftms.getCharacteristic(0x2ACC)).readValue();
+        const fv = await (await ftms.getCharacteristic(CH.ftmsFeature)).readValue();
         if (fv.byteLength >= 8) { const ts = fv.getUint32(4, true); trainer.features = { erg: !!(ts & (1 << 3)), sim: !!(ts & (1 << 13)) }; }
         tlog('Fähigkeiten: ERG ' + (trainer.features?.erg ? 'ja' : 'nein') + ', Steigung ' + (trainer.features?.sim ? 'ja' : 'nein'));
       } catch (e) { tlog('Fähigkeiten nicht lesbar: ' + e.message); }
       try {
-        const cp = await ftms.getCharacteristic(0x2AD9);
+        const cp = await ftms.getCharacteristic(CH.ftmsControl);
         cp.addEventListener('characteristicvaluechanged', (e: any) => onCpResponse(e.target.value));
         await cp.startNotifications();
         trainer.cp = cp; trainer.controllable = true;
@@ -158,7 +158,7 @@ export async function connectTrainer(all = false) {
       step = 'Leistungsmesser einrichten (weder FTMS noch Tacx FE-C gefunden)';
       trainer.proto = 'cps';
       const cps = await server.getPrimaryService(CPS);
-      const ch = await cps.getCharacteristic(0x2A63);
+      const ch = await cps.getCharacteristic(CH.cyclingPower);
       ch.addEventListener('characteristicvaluechanged', (e: any) => {
         const r = parseCyclingPower(e.target.value, trainer.prevCrank, performance.now());
         trainer.prevCrank = r.prev; applyData(r.data);

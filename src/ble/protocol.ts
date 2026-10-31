@@ -2,7 +2,15 @@
    werten Nachrichten aus. Dadurch lassen sie sich ohne Trainer testen. */
 import { clamp, fmt1 } from '../util';
 
-export const FTMS = 0x1826, CPS = 0x1818;
+/* Alle Kennungen als vollständige Text-UUIDs: Der Standard erlaubt auch Zahlen (0x1826) und Namen
+   ('heart_rate'), aber manche Browser – z.B. Bluefy auf dem iPad – können nur die Textform übersetzen
+   ("request payload could not be parsed"). */
+export const uuid16 = (n: number) => '0000' + n.toString(16).padStart(4, '0') + '-0000-1000-8000-00805f9b34fb';
+export const FTMS = uuid16(0x1826), CPS = uuid16(0x1818), HRS = uuid16(0x180D);
+export const CH = {
+  indoorBike: uuid16(0x2AD2), ftmsFeature: uuid16(0x2ACC), ftmsControl: uuid16(0x2AD9),
+  cyclingPower: uuid16(0x2A63), heartRate: uuid16(0x2A37)
+};
 export const TACX_FEC = '6e40fec1-b5a3-f393-e0a9-e50e24dcca9e';
 export const TACX_RX = '6e40fec2-b5a3-f393-e0a9-e50e24dcca9e';
 export const TACX_TX = '6e40fec3-b5a3-f393-e0a9-e50e24dcca9e';
