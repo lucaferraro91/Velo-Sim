@@ -1,4 +1,8 @@
 # Velo-Sim
+Work in progress, just for fun. Maybe it will develop to an unreal engine game who knows ^^
+Ipad User: try bluefy browser
+
+
 
 Indoor-Velotraining im Browser: GPX-Strecken in einer beim Fahren erzeugten 3D-Welt abfahren,
 Smart Trainer steuern (Steigung mit virtuellen Gängen oder ERG), Workouts laden oder selbst bauen
