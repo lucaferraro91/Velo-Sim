@@ -3,7 +3,7 @@ import { $, cssVar, sizeCanvas, fmtTime, bus } from '../util';
 import { settings, saveSettings } from '../settings';
 import { fmtPow, pctFtp, zoneOf } from '../core/zones';
 import { wo, segTarget, skipInterval, closeWorkout } from '../workouts/engine';
-import { paintWorkout, type WorkoutGeom } from './charts';
+import { paintWorkout, drawProfileStatic, drawProfile, type WorkoutGeom } from './charts';
 import { renderCtrl, updateHud } from './hud';
 
 const woCanvas = () => $('#woChart') as HTMLCanvasElement;
@@ -59,6 +59,9 @@ export function renderWorkoutInfo() {
 
 bus.on('workout-loaded', () => {
   $('#woPanel').hidden = !wo.w;
+  // Auf Tablets teilen sich Höhenprofil und Workout die untere Leiste – beide neu zeichnen
+  document.body.classList.toggle('wo-active', !!wo.w);
+  drawProfileStatic(); drawProfile();
   if (wo.w) { $('#woName').textContent = wo.w.name; drawWorkoutStatic(); renderWorkoutInfo(); drawWorkout(); }
 });
 bus.on('workout', () => { renderWorkoutInfo(); });

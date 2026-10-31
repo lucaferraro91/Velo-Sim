@@ -186,4 +186,18 @@ kbd{font-family:inherit;font-size:12px;border:1px solid var(--line);border-botto
   .map{display:none}
   #profile{height:70px}
 }
+/* Tablets (Touch) und kleinere Bildschirme: Workout unten rechts neben dem Höhenprofil, je halbe Breite,
+   kompakt in der Höhe des Profils (Telefone ausgenommen, dort bleibt es oben über die ganze Breite) */
+@media (min-width: 821px) and (pointer: coarse), (min-width: 821px) and (max-width: 1280px){
+  body.wo-active .bottom{right:calc(50% + 5px)}
+  .wo{top:auto;bottom:10px;left:calc(50% + 5px);right:10px;transform:none;width:auto;height:122px;padding:7px 10px;gap:4px}
+  .wo-head b{font-size:15px}
+  .wo-btns button{min-height:24px;padding:1px 7px;font-size:12px}
+  #woChart{flex:1;height:auto;min-height:0}
+  .wo-now{flex-direction:row;align-items:baseline;gap:8px;min-width:0}
+  .wo-seg{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .wo-left{font-size:22px;order:-1}
+  .wo-target{font-size:18px;padding:2px 9px}
+  .wo-foot{display:none}
+}
 @media (prefers-reduced-motion: reduce){ *{scroll-behavior:auto} }
