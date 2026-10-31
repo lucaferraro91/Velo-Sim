@@ -87,7 +87,8 @@ window.addEventListener('dragover', e => e.preventDefault());
 window.addEventListener('drop', e => { e.preventDefault(); dragDepth = 0; $('#drop').hidden = true; const f = e.dataTransfer.files && e.dataTransfer.files[0]; if (f) handleFile(f); });
 
 /* ---------------- Bedienung ---------------- */
-$('#btnTrainer').onclick = connectTrainer; $('#btnTrainer2').onclick = connectTrainer;
+$('#btnTrainer').onclick = () => connectTrainer(); $('#btnTrainer2').onclick = () => connectTrainer();
+$('#btnTrainerAll').onclick = () => connectTrainer(true);
 $('#btnHr').onclick = connectHr; $('#btnClick').onclick = connectClick;
 $('#btnPlay').onclick = () => { if (state.finished) return restart(); setRunning(!state.running); };
 $('#btnGo').onclick = () => setRunning(true);

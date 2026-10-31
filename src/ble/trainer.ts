@@ -26,8 +26,9 @@ export function btAvailable() {
   if (!(navigator as any).bluetooth) { notify('Bluetooth ist in diesem Browser nicht verfügbar. Nutze Chrome oder Edge am Computer oder auf Android.', 6000); return false; }
   return true;
 }
-export function btError(e: any) {
-  if (e && e.name === 'NotFoundError') return;   // Auswahl abgebrochen
+export function btError(e: any, step = '') {
+  if (e && e.name === 'NotFoundError' && !step) return;   // Auswahl abgebrochen
+  tlog('✗ ' + (step ? step + ': ' : '') + (e && e.name ? e.name + ' – ' : '') + (e && e.message ? e.message : e));
   if (e && e.name === 'SecurityError') notify('Bluetooth ist in dieser eingebetteten Ansicht gesperrt. Öffne die Seite in einem eigenen Browser-Tab.', 7000);
   else notify('Verbindung fehlgeschlagen: ' + (e && e.message ? e.message : e), 6000);
   console.warn(e);
@@ -51,11 +52,28 @@ export function cpWrite(bytes: number[]) {
   const buf = new Uint8Array(wire);
   cpChain = cpChain.then(() => {
     tlog('→ ' + describeCmd(bytes));
-    const w = trainer.proto === 'tacx' && c.writeValueWithoutResponse && !c.properties.write ? c.writeValueWithoutResponse(buf)
-      : c.writeValueWithResponse ? c.writeValueWithResponse(buf) : c.writeValue(buf);
-    return withTimeout(w, 4000);
+    return withTimeout(writeChar(c, buf), 4000);
   }).catch(e => tlog('✗ Schreibfehler: ' + (e && e.message || e)));
   return cpChain;
+}
+
+/* Schreiben mit oder ohne Antwort – je nachdem, was die Charakteristik kann. Manche Browser
+   (z.B. Bluefy auf dem iPad) liefern keine Angaben zu den Eigenschaften und bieten nicht alle
+   Schreibarten an; dann wird die andere Art versucht und für die Verbindung gemerkt. */
+let writeMode: 'resp' | 'noresp' | null = null;
+async function writeChar(c: BluetoothRemoteGATTCharacteristic, buf: Uint8Array<ArrayBuffer>) {
+  const props: any = c.properties || {};
+  const canResp = typeof c.writeValueWithResponse === 'function', canNo = typeof c.writeValueWithoutResponse === 'function';
+  if (!writeMode) writeMode = (props.write === false && props.writeWithoutResponse && canNo) || (!canResp && canNo) ? 'noresp' : 'resp';
+  const doWrite = (m: 'resp' | 'noresp') => m === 'noresp' ? c.writeValueWithoutResponse(buf) : canResp ? c.writeValueWithResponse(buf) : c.writeValue(buf);
+  try { await doWrite(writeMode); }
+  catch (e) {
+    const other = writeMode === 'resp' ? 'noresp' : 'resp';
+    if (other === 'noresp' && !canNo) throw e;
+    await doWrite(other);
+    tlog('Schreibart gewechselt: ' + (other === 'noresp' ? 'ohne' : 'mit') + ' Antwort');
+    writeMode = other;
+  }
 }
 export const sendUserConfig = () => { if (trainer.connected && trainer.proto === 'tacx') cpWrite(fecUserConfig(settings.riderKg, settings.bikeKg)); };
 
@@ -71,10 +89,18 @@ function onCpResponse(dv: DataView) {
   }
 }
 
-export async function connectTrainer() {
+/* all = true zeigt alle Bluetooth-Geräte (Notlösung, falls der Trainer in der normalen Suche
+   fehlt – unter iOS sieht der Browser nur die Dienste, die ein Gerät aktiv ankündigt). */
+export async function connectTrainer(all = false) {
   if (!btAvailable()) return;
+  let step = '';   // leer = Auswahl; Abbruch der Auswahl wird nicht gemeldet
   try {
-    const device = await (navigator as any).bluetooth.requestDevice({ filters: [{ services: [FTMS] }, { services: [CPS] }, { services: [TACX_FEC] }], optionalServices: [FTMS, CPS, TACX_FEC] });
+    const optionalServices = [FTMS, CPS, TACX_FEC];
+    const device = await (navigator as any).bluetooth.requestDevice(all ? { acceptAllDevices: true, optionalServices } : {
+      filters: [{ services: [FTMS] }, { services: [CPS] }, { services: [TACX_FEC] }, { namePrefix: 'Tacx' }, { namePrefix: 'NEO' }, { namePrefix: 'Neo' }],
+      optionalServices
+    });
+    writeMode = null;
     // Bisherige Verbindung sauber trennen, bevor der neue Trainer übernimmt
     const gen = ++trainer.gen;
     if (trainer.device && trainer.device.gatt.connected) trainer.device.gatt.disconnect();
@@ -88,11 +114,15 @@ export async function connectTrainer() {
       notify('Trainer getrennt. Du fährst jetzt mit simulierter Leistung weiter.');
     });
     notify('Verbinde mit ' + (device.name || 'Trainer') + ' …', 3000);
+    step = 'Verbindung aufbauen';
     const server = await device.gatt.connect();
+    tlog('Verbunden, suche Dienste');
+    step = 'Dienste suchen';
     let ftms = null, tacx = null;
-    try { ftms = await server.getPrimaryService(FTMS); } catch (e) { /* kein FTMS */ }
-    if (!ftms) try { tacx = await server.getPrimaryService(TACX_FEC); } catch (e) { /* kein Tacx */ }
+    try { ftms = await server.getPrimaryService(FTMS); } catch (e) { tlog('FTMS: ' + (e.name || '') + ' ' + (e.message || '')); }
+    if (!ftms) try { tacx = await server.getPrimaryService(TACX_FEC); } catch (e) { tlog('Tacx FE-C: ' + (e.name || '') + ' ' + (e.message || '')); }
     if (ftms) {
+      step = 'FTMS einrichten';
       trainer.proto = 'ftms'; tlog('FTMS-Dienst gefunden');
       const data = await ftms.getCharacteristic(0x2AD2);
       data.addEventListener('characteristicvaluechanged', (e: any) => applyData(parseIndoorBike(e.target.value)));
@@ -114,6 +144,7 @@ export async function connectTrainer() {
       trainer.connected = true; ctl.lastKey = null;
       notify((device.name || 'Trainer') + ' verbunden' + (trainer.controllable ? ', Steigung, ERG und virtuelle Gänge aktiv.' : ', nur Leistungsdaten.'));
     } else if (tacx) {
+      step = 'Tacx FE-C einrichten';
       trainer.proto = 'tacx'; tlog('Tacx FE-C-Dienst gefunden');
       const rx = await tacx.getCharacteristic(TACX_RX);
       rx.addEventListener('characteristicvaluechanged', (e: any) => { const d = parseFec(e.target.value); if (d) applyData(d); });
@@ -124,6 +155,7 @@ export async function connectTrainer() {
       sendUserConfig();
       notify((device.name || 'Tacx') + ' verbunden (Tacx-Protokoll). Steigung, ERG und virtuelle Gänge aktiv.');
     } else {
+      step = 'Leistungsmesser einrichten (weder FTMS noch Tacx FE-C gefunden)';
       trainer.proto = 'cps';
       const cps = await server.getPrimaryService(CPS);
       const ch = await cps.getCharacteristic(0x2A63);
@@ -137,7 +169,7 @@ export async function connectTrainer() {
       notify((device.name || 'Gerät') + ' verbunden. Es liefert nur Leistung, der Widerstand wird nicht gesteuert.', 6000);
     }
     bus.emit('devices');
-  } catch (e) { btError(e); }
+  } catch (e) { btError(e, step); }
 }
 
 /* Regelung: sendet laufend Steigung (mit virtuellem Gang) oder ERG-Ziel.
