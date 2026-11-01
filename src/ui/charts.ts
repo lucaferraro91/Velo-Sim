@@ -48,7 +48,7 @@ export function drawProfileStatic() {
   const padL = 42 * dpr, padR = 6 * dpr, padT = 6 * dpr, padB = 16 * dpr;
   const range = Math.max(30, route.maxE - route.minE), e0 = route.minE - range * 0.08;
   const xs = (s: number) => padL + s / route.total * (W - padL - padR), ys = (e: number) => padT + (1 - (e - e0) / (range * 1.12)) * (H - padT - padB);
-  profGeom = { xs, ys, dpr, padB, H };
+  profGeom = { xs, ys, dpr, padB, H, padL, padR, W };
   ctx.clearRect(0, 0, W, H);
   const cols = Math.floor(W - padL - padR), p = { x: 0, z: 0, e: 0, g: 0 };
   for (let c = 0; c < cols; c++) {
@@ -73,6 +73,13 @@ export function drawProfile() {
   ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fillRect(x, 0, prof.width - x, H - padB);
   ctx.strokeStyle = cssVar('--text') || '#000'; ctx.lineWidth = 1.5 * dpr; ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H - padB); ctx.stroke();
   ctx.beginPath(); ctx.arc(x, y, 5 * dpr, 0, Math.PI * 2); ctx.fillStyle = '#f5b700'; ctx.fill(); ctx.stroke();
+}
+// Distanz auf der Strecke (m) an einer Bildschirm-Position im Höhenprofil
+export function profileDistanceAt(clientX: number): number | null {
+  const route = ride.route; if (!profGeom || !route) return null;
+  const prof = $('#profile') as HTMLCanvasElement, r = prof.getBoundingClientRect();
+  const px = (clientX - r.left) * profGeom.dpr;
+  return (px - profGeom.padL) / (profGeom.W - profGeom.padL - profGeom.padR) * route.total;
 }
 
 /* Workout als Zonenbalken. opt.total/opt.maxF halten den Massstab beim Ziehen im Editor fest

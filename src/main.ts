@@ -1,5 +1,5 @@
 import './styles.css';
-import { $, clamp, bus } from './util';
+import { $, clamp, bus, fmt1 } from './util';
 import { initStore } from './store';
 import { loadSettings } from './settings';
 import { state, ride } from './core/state';
@@ -13,10 +13,10 @@ import { trainer, connectTrainer, updateControl } from './ble/trainer';
 import { hrm, connectHr, connectClick } from './ble/sensors';
 import { parseZWO, parseERG, parseGarminFIT } from './workouts/formats';
 import { wo, tickWorkout, loadWorkout, skipInterval } from './workouts/engine';
-import { view, loadRoute, setRunning, finish, restart, saveRideFit } from './ride';
+import { view, loadRoute, setRunning, finish, restart, saveRideFit, seekTo } from './ride';
 import { CAM_MODES } from './render3d';
 import { updateHud, renderCtrl, setDots, setSim, toast } from './ui/hud';
-import { drawMini, drawProfile, drawMiniStatic, drawProfileStatic } from './ui/charts';
+import { drawMini, drawProfile, drawMiniStatic, drawProfileStatic, profileDistanceAt } from './ui/charts';
 import { updateMap, mapResize } from './ui/map';
 import { drawWorkout, drawWorkoutStatic, renderWorkoutInfo } from './ui/workoutPanel';
 import { toggleDiag } from './ui/diag';
@@ -121,6 +121,26 @@ $('#ergUp').onclick = () => ergStep(10);
 $('#ergDown').onclick = () => ergStep(-10);
 $('#simPower').addEventListener('input', () => setSim(+$('#simPower').value));
 bus.on('click', (d: number) => plusMinus(d));
+
+/* Springen auf der Strecke (zum Testen): im Höhenprofil klicken oder ziehen, auf die Karte klicken,
+   Bild ↑ / Bild ↓ = ±500 m */
+function seek(s: number, announce = true) {
+  if (!ride.route || state.finished) return;
+  seekTo(s);
+  drawProfile(); drawMini(); updateHud(); updateMap(performance.now() + 2000);
+  if (announce) toast('Position ' + fmt1(state.s / 1000) + ' km', 1200);
+}
+bus.on('seek', (s: number) => seek(s));
+{
+  const prof = $('#profile') as HTMLCanvasElement;
+  let dragging = false;
+  prof.title = 'Klicken oder ziehen: an diese Stelle der Strecke springen';
+  prof.addEventListener('pointerdown', e => { const s = profileDistanceAt(e.clientX); if (s == null) return; dragging = true; prof.setPointerCapture(e.pointerId); seek(s, false); });
+  prof.addEventListener('pointermove', e => { if (!dragging) return; const s = profileDistanceAt(e.clientX); if (s != null) seek(s, false); });
+  const end = () => { if (dragging) { dragging = false; toast('Position ' + fmt1(state.s / 1000) + ' km', 1200); } };
+  prof.addEventListener('pointerup', end);
+  prof.addEventListener('pointercancel', end);
+}
 bus.on('erg-unsupported', () => setMode('sim', true));
 
 window.addEventListener('keydown', e => {
@@ -137,6 +157,7 @@ window.addEventListener('keydown', e => {
     e.preventDefault(); const d = e.key === 'ArrowUp' ? 10 : -10;
     if (state.mode === 'erg') ergStep(d); else setSim(state.simPower + d);
   }
+  else if (e.key === 'PageUp' || e.key === 'PageDown') { e.preventDefault(); seek(state.s + (e.key === 'PageUp' ? 500 : -500)); }
   else if (e.key === 'ArrowRight' || e.key === '+') { e.preventDefault(); shiftGear(1); }
   else if (e.key === 'ArrowLeft' || e.key === '-') { e.preventDefault(); shiftGear(-1); }
 });

@@ -47,6 +47,16 @@ export function finish() {
 
 export const restart = () => { if (ride.route) loadRoute(ride.route); };
 
+/* An eine Stelle der Strecke springen (zum Testen, z.B. für Unreal). Tempo und Fahrzeit bleiben;
+   in einer aufgezeichneten Fahrt erscheint der Sprung als Lücke in der Distanz. */
+export function seekTo(s: number) {
+  const route = ride.route;
+  if (!route || state.finished) return;
+  state.s = Math.max(0, Math.min(route.total - 1, s));
+  sampleAt(route, state.s, ride.cur);
+  updateControl(performance.now(), true);   // Trainer bekommt sofort die Steigung der neuen Stelle
+}
+
 export function saveRideFit() {
   if (!hasRecording()) { toast('Es gibt noch keine Fahrt zum Speichern (mindestens 10 Sekunden).'); return; }
   downloadBlob(recordingFit(), recordingFileName(), 'application/vnd.ant.fit');

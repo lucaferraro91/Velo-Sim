@@ -2,7 +2,7 @@
    API-Schlüssel – die topografische Karte von Esri läuft ohne beides. */
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { $ } from '../util';
+import { $, bus } from '../util';
 import { state, ride } from '../core/state';
 import { STEP, toLatLon } from '../core/route';
 
@@ -17,6 +17,13 @@ export function setupMapRoute() {
     osm.map.attributionControl.setPrefix(false);
     L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Karte © <a href="https://www.esri.com" target="_blank" rel="noopener">Esri</a>, OpenStreetMap u.a.' }).addTo(osm.map);
     osm.map.on('dragstart', () => setMapFollow(false));
+    // Klick auf die Karte: zur nächstgelegenen Stelle der Strecke springen (höchstens 300 m daneben)
+    osm.map.on('click', (e: L.LeafletMouseEvent) => {
+      if (!osm.pts.length) return;
+      let best = 0, bestD = Infinity;
+      osm.pts.forEach((p, i) => { const d = osm.map.distance(e.latlng, p); if (d < bestD) { bestD = d; best = i; } });
+      if (bestD <= 300) bus.emit('seek', best * 2 * STEP);
+    });
   }
   osm.map.invalidateSize();
   for (const k of ['all', 'done', 'dot'] as const) if (osm[k]) osm[k].remove();
