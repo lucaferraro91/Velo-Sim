@@ -23,10 +23,25 @@ import { toggleDiag } from './ui/diag';
 import { workoutsOpen, closeWorkouts } from './ui/editor';
 import './ui/settingsDialog';
 
-/* ---------------- Hauptschleife ---------------- */
-let last = performance.now(), hudAt = 0;
+/* ---------------- Hauptschleife ----------------
+   Sichtbar: requestAnimationFrame (mit 3D-Bild und Anzeige).
+   Versteckt (anderer Tab, Fenster verdeckt, z.B. Unreal im Vordergrund): Chrome hält
+   requestAnimationFrame an und bremst Timer auf 1× pro Sekunde. Dann treibt ein kleiner
+   Web Worker die Schleife alle 50 ms an – seine Uhr wird nicht gebremst. So laufen Trainer-
+   Steuerung, ERG, Workout, Aufzeichnung und Telemetrie weiter, nur ohne Zeichnen. */
+let last = performance.now(), hudAt = 0, rafAt = 0;
 function frame(now: number) {
-  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  rafAt = performance.now();
+  step(now, true);
+  requestAnimationFrame(frame);
+}
+// Springt ein, sobald länger als 250 ms kein Bild gezeichnet wurde (document.hidden ist nicht
+// überall zuverlässig, z.B. bei eingebetteten Ansichten)
+const ticker = new Worker(URL.createObjectURL(new Blob(['setInterval(() => postMessage(0), 50);'], { type: 'text/javascript' })));
+ticker.onmessage = () => { const now = performance.now(); if (now - rafAt > 250) step(now, false); };
+
+function step(now: number, render: boolean) {
+  const dt = Math.min(0.1, Math.max(0, (now - last) / 1000)); last = now;
   const route = ride.route;
   if (route) {
     // Leistung und Kadenz: vom Trainer, sonst simuliert
@@ -49,11 +64,11 @@ function frame(now: number) {
     } else sampleAt(route, state.s, ride.cur);
     updateControl(now);
     const snap = snapshot();
-    view.frame(snap, dt, state.camMode, now);
     telemetryTick(now, () => snap);
+    if (!render) return;
+    view.frame(snap, dt, state.camMode, now);
     if (now - hudAt > 200) { updateHud(); drawMini(); drawProfile(); updateMap(now); if (wo.w) { renderWorkoutInfo(); drawWorkout(); } hudAt = now; }
   }
-  requestAnimationFrame(frame);
 }
 
 function resize() {
