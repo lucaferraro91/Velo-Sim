@@ -2,7 +2,7 @@
    Objekt; optional geht es zusätzlich per WebSocket an einen externen Renderer (z.B. Unreal Engine).
    Format: siehe docs/telemetrie.md */
 import { state, ride } from './state';
-import { toLatLon } from './route';
+import { toLatLon, STEP, type Route } from './route';
 import { ringT, cogT, gearRatio } from './gears';
 import { wo, currentSegment } from '../workouts/engine';
 import { settings } from '../settings';
@@ -47,6 +47,27 @@ export function snapshot(): Telemetry {
 let ws: WebSocket | null = null, wsUrl = '', retryAt = 0, sentAt = 0;
 export const telemetryStatus = () => !settings.telemetry ? 'aus' : ws && ws.readyState === WebSocket.OPEN ? 'verbunden' : 'getrennt';
 
+/* Strecken-Nachricht: die aufbereitete Strecke (alle STEP m ein Punkt), damit ein Renderer keine
+   GPX-Datei lesen muss und die Strasse exakt dort liegt, wo die Physik rechnet.
+   points = [x0, z0, e0, x1, z1, e1, …] in Metern, auf cm gerundet. */
+export interface RouteMessage {
+  type: 'route'; v: 1; name: string; step: number; n: number; total: number;
+  climb: number; minE: number; maxE: number;
+  geo: Route['geo'] | null; points: number[];
+}
+export function routeMessage(r: Route): RouteMessage {
+  const points = new Array(r.n * 3), cm = (v: number) => Math.round(v * 100) / 100;
+  for (let i = 0; i < r.n; i++) { points[i * 3] = cm(r.X[i]); points[i * 3 + 1] = cm(r.Z[i]); points[i * 3 + 2] = cm(r.E[i]); }
+  return { type: 'route', v: 1, name: r.name, step: STEP, n: r.n, total: r.total,
+    climb: Math.round(r.climb), minE: cm(r.minE), maxE: cm(r.maxE), geo: r.geo || null, points };
+}
+
+let routeSent: Route | null = null;
+function sendRoute() {
+  if (!ws || ws.readyState !== WebSocket.OPEN || !ride.route) return;
+  try { ws.send(JSON.stringify(routeMessage(ride.route))); routeSent = ride.route; } catch (e) { /* später erneut */ }
+}
+
 export function telemetryTick(now: number, snap: () => Telemetry) {
   if (!settings.telemetry) { if (ws) { ws.close(); ws = null; } return; }
   if (!ws || wsUrl !== settings.telemetryUrl || ws.readyState === WebSocket.CLOSED) {
@@ -54,8 +75,14 @@ export function telemetryTick(now: number, snap: () => Telemetry) {
     if (now < retryAt) return;
     retryAt = now + 3000; wsUrl = settings.telemetryUrl;
     try { ws = new WebSocket(wsUrl); } catch (e) { ws = null; return; }
+    routeSent = null;
+    ws.onopen = sendRoute;
+    // Ein Renderer, der später dazukommt, kann die Strecke anfordern: {"type":"request-route"}
+    ws.onmessage = e => { try { if (JSON.parse(String(e.data)).type === 'request-route') sendRoute(); } catch (err) { /* andere Nachricht */ } };
   }
-  if (ws.readyState !== WebSocket.OPEN || now - sentAt < 100) return;   // ca. 10× pro Sekunde
+  if (ws.readyState !== WebSocket.OPEN) return;
+  if (routeSent !== ride.route) sendRoute();   // neue Strecke geladen
+  if (now - sentAt < 100) return;              // Zustand ca. 10× pro Sekunde
   sentAt = now;
   try { ws.send(JSON.stringify(snap())); } catch (e) { /* Verbindung bricht gerade ab */ }
 }

@@ -14,7 +14,36 @@ sich weiter um Bluetooth (Trainer, Click, Puls), Fahrphysik, Gänge und Workouts
 
 Den Verbindungsstatus zeigt die Trainer-Diagnose (Taste <kbd>D</kbd>, Zeile «Telemetrie»).
 
-## Nachricht
+## Nachrichten
+
+Es gibt zwei Arten: die **Strecke** (einmalig) und den **Zustand** (laufend).
+
+### Strecke: `{"type":"route"}`
+
+Wird gesendet, sobald die Verbindung steht, bei jedem Streckenwechsel und auf Anfrage.
+Ein Renderer braucht damit keine GPX-Datei: Er baut die Strasse direkt aus diesen Punkten,
+die exakt dieselben sind, mit denen Velo-Sim die Physik rechnet.
+
+```json
+{
+  "type": "route", "v": 1, "name": "Demo-Runde mit Anstieg",
+  "step": 5, "n": 2801, "total": 14000,
+  "climb": 300, "minE": 421.3, "maxE": 680.9,
+  "geo": null,
+  "points": [0, 0, 430.1,  1.48, 4.77, 430.2,  …]
+}
+```
+
+| Feld | Bedeutung |
+|---|---|
+| `step`, `n`, `total` | Punktabstand (m), Anzahl Punkte, Länge (m) = (n − 1) · step |
+| `points` | flach: `[x0, z0, e0, x1, z1, e1, …]` in Metern (cm-genau); Punkt `i` liegt bei Distanz `i · step` |
+| `geo` | bei GPX `{ lat0, lon0, kx, kz }`: Breite = lat0 − z / kz, Länge = lon0 + x / kx; sonst `null` |
+
+Kommt ein Renderer später dazu, schickt ihm das Relais die zuletzt gesendete Strecke automatisch.
+Alternativ kann er `{"type":"request-route"}` senden; Velo-Sim antwortet mit der Strecke.
+
+### Zustand: `{"type":"state"}`
 
 ```json
 {
